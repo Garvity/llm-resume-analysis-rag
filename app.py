@@ -118,6 +118,25 @@ def call_backend_no_data(endpoint, file):
         return None
 
 
+def save_jd_to_vectorstore(jd_text, button_key):
+    """Show a button to save a job description to the vector store."""
+    if jd_text and jd_text.strip():
+        if st.button("💾 Save JD to Vector DB", key=button_key):
+            with st.spinner("Saving job description to vector database..."):
+                response = requests.post(
+                    "http://localhost:8000/save_jd_to_vectorstore",
+                    data={"job_description": jd_text},
+                )
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success"):
+                    st.success(f"✅ {result['message']}")
+                else:
+                    st.error(f"❌ {result.get('message', 'Failed to save.')}")
+            else:
+                st.error(f"Error: {response.text}")
+
+
 def get_score_color(score):
     """Return a color based on score value."""
     if score >= 80:
@@ -302,6 +321,7 @@ elif page == "Resume Matching":
         placeholder="Paste the job description here...",
     )
     st.session_state.job_description = job_description
+    save_jd_to_vectorstore(job_description, "save_jd_matching")
 
     if not job_description.strip():
         st.info("✏️ Enter a job description to continue.")
@@ -425,6 +445,7 @@ elif page == "Chat with Resume and Job Description":
         placeholder="Paste job description for context...",
     )
     st.session_state.job_description = job_description
+    save_jd_to_vectorstore(job_description, "save_jd_chat")
 
     if not uploaded_file:
         st.info("📤 Please upload a resume PDF in the sidebar to start chatting.")
@@ -496,6 +517,7 @@ elif page == "Compare Resumes":
         placeholder="Paste the job description here...",
         key="compare_jd",
     )
+    save_jd_to_vectorstore(compare_jd, "save_jd_compare")
 
     if not uploaded_resumes:
         st.info("📤 Upload 2 or more resume PDFs above to compare.")
@@ -852,6 +874,7 @@ elif page == "Resume Enhancement":
             placeholder="Paste the job description you want to tailor your resume for...",
             key="rewrite_jd",
         )
+        save_jd_to_vectorstore(rewrite_jd, "save_jd_rewriter")
 
         if not rewrite_jd.strip():
             st.info("✏️ Paste a job description above to get rewrite suggestions.")
@@ -887,6 +910,7 @@ elif page == "Resume Enhancement":
             placeholder="Paste the job description for the cover letter...",
             key="cover_jd",
         )
+        save_jd_to_vectorstore(cover_jd, "save_jd_cover")
 
         if not cover_jd.strip():
             st.info("✏️ Paste a job description above to generate a cover letter.")
@@ -933,6 +957,7 @@ elif page == "Resume Enhancement":
             placeholder="Paste a JD to tailor the summary to a specific role, or leave blank for a general summary...",
             key="summary_jd",
         )
+        save_jd_to_vectorstore(summary_jd, "save_jd_summary")
 
         if st.button("✨ Generate Summary", key="summary_btn", type="primary"):
             with st.spinner("🔄 Generating tailored summary options..."):
@@ -974,6 +999,26 @@ elif page == "Batch JD Matching":
         placeholder="Software Engineer at Google\nWe are looking for...\n\n---JD---\n\nData Scientist at Amazon\nWe need a candidate who...\n\n---JD---\n\nML Engineer at Meta\nExciting opportunity for...",
         key="batch_jds",
     )
+
+    # Save all batch JDs to vector store
+    if batch_jds.strip():
+        parsed_jds = [j.strip() for j in batch_jds.split("---JD---") if j.strip()]
+        if parsed_jds and st.button(f"💾 Save {len(parsed_jds)} JD(s) to Vector DB", key="save_jd_batch"):
+            saved = 0
+            for idx, jd in enumerate(parsed_jds, 1):
+                with st.spinner(f"Saving JD {idx}/{len(parsed_jds)}..."):
+                    resp = requests.post(
+                        "http://localhost:8000/save_jd_to_vectorstore",
+                        data={"job_description": jd},
+                    )
+                if resp.status_code == 200 and resp.json().get("success"):
+                    st.success(f"✅ JD {idx} — {resp.json()['message']}")
+                    saved += 1
+                else:
+                    msg = resp.json().get("message", resp.text) if resp.status_code == 200 else resp.text
+                    st.error(f"❌ JD {idx} — {msg}")
+            if saved:
+                st.balloons()
 
     if not batch_jds.strip():
         st.info("✏️ Paste job descriptions above, separated by `---JD---`.")

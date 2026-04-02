@@ -75,7 +75,7 @@ def clean_text(text):
     return text
 
 
-def get_llm_response(api_key, prompt, model="mistralai/Mistral-7B-Instruct-v0.2"):
+def get_llm_response(api_key, prompt, model="meta-llama/Llama-3.1-8B-Instruct"):
     """
     Sends a prompt to Hugging Face Inference API and returns the generated text.
     """
@@ -83,7 +83,7 @@ def get_llm_response(api_key, prompt, model="mistralai/Mistral-7B-Instruct-v0.2"
     
     try:
         completion = client.chat.completions.create(
-            model="mistralai/Mistral-7B-Instruct-v0.2",
+            model="meta-llama/Llama-3.1-8B-Instruct",
             messages=[
                 {
                     "role": "user",
@@ -307,6 +307,40 @@ async def save_resume_to_vectorstore(
         }
     except Exception as e:
         return {"success": False, "message": f"Error saving resume: {str(e)}"}
+
+
+# Save job description text to vector store
+@app.post("/save_jd_to_vectorstore")
+async def save_jd_to_vectorstore(
+    job_description: str = Form(...),
+):
+    """Clean, chunk, and add a job description to the global FAISS job store."""
+    global job_vectorstore
+    try:
+        jd_text = clean_text(job_description)
+
+        if not jd_text.strip():
+            return {"success": False, "message": "Job description text is empty."}
+
+        chunks = splitter.split_text(jd_text)
+        if not chunks:
+            return {"success": False, "message": "No text chunks generated from the job description."}
+
+        from langchain.schema import Document
+        docs = [
+            Document(page_content=chunk, metadata={"source": "user_input"})
+            for chunk in chunks
+        ]
+
+        job_vectorstore.add_documents(docs)
+        job_vectorstore.save_local("vector_store/job_faiss")
+
+        return {
+            "success": True,
+            "message": f"Job description saved! {len(docs)} chunks added to vector store.",
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Error saving job description: {str(e)}"}
 
 
 # ═══════════════════════════════════════════════════════════════════════
